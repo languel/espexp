@@ -5,11 +5,55 @@
   <title>Force Trainer II — live EEG</title>
   <script src="p5.min.js"></script>
   <style>
-    html, body { margin: 0; padding: 0; background: #0a0e14; overflow: hidden; }
-    canvas { display: block; }
+    :root { --bg:#0a0e14; --panel:#111823; --line:#1e2632; --dim:#6b7a8c; --text:#c8d4e0; }
+    html, body { margin:0; padding:0; background:var(--bg); overflow:hidden;
+                 font-family: Menlo, Monaco, monospace; }
+    #controls {
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      min-height:38px; padding:6px 16px; background:var(--panel);
+      border-bottom:1px solid var(--line); color:var(--text); font-size:12px;
+    }
+    #controls .sep { width:1px; height:20px; background:var(--line); }
+    button, select {
+      font-family:inherit; font-size:12px; color:var(--text);
+      background:#18212e; border:1px solid var(--line); border-radius:4px;
+      padding:5px 10px; cursor:pointer;
+    }
+    button:hover:not(:disabled), select:hover { border-color:#33455c; }
+    button:disabled { opacity:.35; cursor:default; }
+    button.on { background:#1d3a5c; border-color:#2f5f96; color:#cfe4ff; }
+    button.rec { background:#4a1520; border-color:#7d2233; color:#ffc4cd; }
+    #mode { font-weight:bold; letter-spacing:.5px; }
+    #mode.live { color:#3ddc84; }
+    #mode.playback { color:#7fb2ff; }
+    #mode.simulated { color:#ffb454; }
+    #recdot { color:#ff5566; }
+    /* Only push status to the right when there is room for it on one line. */
+    @media (min-width: 900px) { #msg { margin-left:auto; } }
+    #msg { color:var(--dim); }
+    canvas { display:block; }
   </style>
 </head>
 <body>
+  <div id="controls">
+    <span id="mode" class="live">LIVE</span>
+    <div class="sep"></div>
+
+    <button id="btnLive">Live</button>
+    <button id="btnSim" title="Synthetic signal — no headset needed">Simulate</button>
+    <button id="btnRec">● Record</button>
+    <span id="recinfo"></span>
+
+    <div class="sep"></div>
+
+    <select id="files"><option value="">— recordings —</option></select>
+    <button id="btnPlay">▶ Play</button>
+    <button id="btnLoop">Loop</button>
+    <span id="playinfo"></span>
+
+    <span id="msg"></span>
+  </div>
+  <script src="controls.js"></script>
   <script src="sketch.js"></script>
 </body>
 </html>

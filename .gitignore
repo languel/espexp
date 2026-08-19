@@ -5,4 +5,8 @@ reader/ForceTrainerReader.app/
 *.bin
 *.log
 
+# Recordings are your own EEG data - commit one deliberately if you want a
+# sample that lets others run the demo without hardware.
+recordings/
+
 .DS_Store

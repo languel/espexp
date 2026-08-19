@@ -31,6 +31,9 @@ Then open <http://localhost:8080>.
 No dependencies: no npm install, no CocoaPods, no ThinkGear Connector. p5 is
 vendored in `web/` so it works offline in a classroom.
 
+**No headset? Run only the server and press Simulate.** The reader and the
+Bluetooth pairing are not needed for that.
+
 If you have several paired devices, or yours advertises a different name:
 
 ```bash
@@ -126,6 +129,42 @@ Roughly in order, in case you need to repeat it for a different device:
    then wrote the JS parser and cross-checked it against the same capture with
    randomized chunk boundaries — identical packet counts either way.
 
+## Three sources: live, recorded, simulated
+
+The control bar switches the byte source at runtime. All three feed the *same*
+parser, so nothing downstream can tell them apart.
+
+| Source | What it is | Needs hardware |
+|---|---|---|
+| **Live** | the headset via the Swift reader | yes |
+| **Playback** | a recorded byte stream, replayed on its original timing | no |
+| **Simulate** | synthesised ThinkGear frames | no |
+
+**Recording** captures the raw bytes, not parsed values, so a recording is a
+faithful stand-in for the hardware — same packets, same bursty Bluetooth
+timing. Files land in `recordings/` as `.jsonl`, deliberately inspectable:
+
+```
+{"format":"espexp-raw-v1","createdAt":"...","sampleRate":512}
+{"t":67,"d":"8002010478aaaa04800200d9a4..."}
+```
+
+`recordings/` is gitignored, since it is your own EEG data. Commit one
+deliberately if you want to ship a sample.
+
+**Simulate** generates real ThinkGear frames — correct sync bytes, lengths and
+checksums — rather than injecting pre-parsed numbers, and mimics the ~8
+bursts/sec delivery pattern. It alternates every 10 s between "eyes open"
+(more beta) and "eyes closed" (strong ~10 Hz alpha), which is the classic EEG
+demonstration and makes the display do something worth looking at.
+
+It is a plausible *synthesis*, not brain activity, and is labelled
+`SIMULATED — SYNTHETIC SIGNAL, NOT EEG` on screen wherever it appears. Verified
+to parse with 0 bad checksums and 0 resyncs at ~509 Hz.
+
+Use it to develop visualizations without wearing the headset, and to keep a
+class running if a battery dies mid-demo.
+
 ## Reading the display
 
 - **Signal quality** is deliberately the loudest element. `poorSignal` 200 means
@@ -145,7 +184,10 @@ Roughly in order, in case you need to repeat it for a different device:
 ```
 reader/reader.swift          Bluetooth → raw bytes on TCP :9000. No parsing.
 server/thinkgear-parser.js   Pure ThinkGear decoder. No I/O, no Bluetooth.
-server/index.js              TCP → parse → WebSocket + static files.
+server/recording.js          Record / replay the raw byte stream.
+server/simulator.js          Synthetic ThinkGear frames, for no-hardware use.
+server/index.js              source switch → parse → WebSocket + static files.
+web/controls.js              Control bar: live / simulate / record / play.
 web/sketch.js                p5 visualization. Pixels only.
 ```
 
@@ -176,10 +218,10 @@ rate still tracking 514 Hz. The footer shows live fps and buffer depth.
 
 Working: transport, parser, bridge, and a live p5 dashboard.
 
+Also working: recording, playback, and a hardware-free simulator.
+
 Not done yet:
 
-- **Record/replay** of a capture, so visuals can be developed without wearing
-  the headset (and so a class can continue if the battery dies).
 - **Splitting the mappings** out of `sketch.js` into a file students edit.
 - **Our own band powers** via FFT over the 512 Hz raw stream, to compare
   against the TGAM's 1 Hz `ASIC_EEG_POWER` — a direct "compute it yourself vs.

@@ -23,7 +23,8 @@ const BAND_LABEL = {
 let rawBuf = [];
 let latest = null;             // most recent 1 Hz aggregate
 let lastUpdateAt = 0;
-let status = { readerConnected: false, streaming: false, stats: null };
+let status = { readerConnected: false, streaming: false, stats: null, mode: 'live' };
+let lastMode = null;
 
 // Bluetooth delivers samples in bursts (~8/sec, ~83 samples each), which makes
 // the trace lurch forward in visible steps. So arrivals go into a jitter buffer
@@ -52,13 +53,29 @@ let peak = 64;
 let ws = null;
 let wsConnected = false;
 
+// Height of the HTML control bar above the canvas.
+function barHeight() {
+  const el = document.getElementById('controls');
+  return el ? el.getBoundingClientRect().height : 0;
+}
+
+function fitCanvas() {
+  resizeCanvas(windowWidth, Math.max(320, windowHeight - barHeight()));
+}
+
 function setup() {
-  createCanvas(windowWidth, windowHeight);
+  createCanvas(windowWidth, Math.max(320, windowHeight - barHeight()));
   textFont('Menlo, Monaco, monospace');
+
+  // The control bar wraps to a second row on narrow windows, which changes
+  // its height without a window resize event - so watch the bar itself.
+  const bar = document.getElementById('controls');
+  if (bar && window.ResizeObserver) new ResizeObserver(fitCanvas).observe(bar);
+
   connect();
 }
 
-function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+function windowResized() { fitCanvas(); }
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}`);
@@ -79,6 +96,15 @@ function connect() {
       lastUpdateAt = millis();
     } else if (msg.type === 'status') {
       status = msg;
+      if (window.applyState) window.applyState(msg);
+      // Clear stale samples when the byte source changes, so the trace does
+      // not splice live signal onto recorded signal.
+      if (lastMode !== null && msg.mode !== lastMode) {
+        rawBuf = [];
+        sampleQueue = [];
+        latest = null;
+      }
+      lastMode = msg.mode;
     }
   };
 }
@@ -145,7 +171,7 @@ function draw() {
   const eSenseH = 42 + 2 * 46;
   const footerH = 40;
   const gaps = 28 + 34 + 30;
-  const waveH = constrain(height - y - bandsH - eSenseH - footerH - gaps, 90, 240);
+  const waveH = constrain(height - y - bandsH - eSenseH - footerH - gaps, 60, 240);
 
   y = drawWaveform(M, y + 28, w, waveH);
   y = drawBands(M, y + 34, w);
@@ -174,6 +200,14 @@ function drawSignalQuality(x, y, w) {
   textSize(13);
   textAlign(LEFT, TOP);
   text('SIGNAL QUALITY', x, y);
+
+  // Simulated data must never be mistaken for a real reading.
+  if (status.mode === 'simulated') {
+    fill(255, 180, 84);
+    textAlign(RIGHT, TOP);
+    text('SIMULATED — SYNTHETIC SIGNAL, NOT EEG', x + w, y);
+    textAlign(LEFT, TOP);
+  }
 
   fill(col);
   textSize(38);
@@ -322,13 +356,21 @@ function drawESense(x, y, w) {
 function drawFooter() {
   const s = status.stats;
   noStroke(); textSize(11);
-  fill(wsConnected ? color(60, 200, 120) : color(255, 80, 80));
+  const playback = status.mode === 'playback';
+  const simulated = status.mode === 'simulated';
+  fill(!wsConnected ? color(255, 80, 80)
+       : simulated ? color(255, 180, 84)
+       : playback ? color(127, 178, 255)
+       : color(60, 200, 120));
   const link = !wsConnected ? 'browser ⇄ server: disconnected'
+    : simulated ? 'SIMULATED SIGNAL — synthetic data, no headset connected'
+    : playback ? `playing recording — not live data${status.playback && status.playback.loop ? ' (looping)' : ''}`
     : !status.readerConnected ? 'server ⇄ reader: not connected (is ForceTrainerReader.app running?)'
-    : status.streaming ? 'streaming' : 'reader connected, no data (headset asleep?)';
+    : status.streaming ? 'streaming from headset' : 'reader connected, no data (headset asleep?)';
   textAlign(LEFT, BOTTOM);
   text(link, 40, height - 14);
-  if (s) {
+  // Drop the diagnostics rather than let them collide with the status text.
+  if (s && width >= 900) {
     fill(70, 80, 92);
     textAlign(RIGHT, BOTTOM);
     const lagMs = Math.round((sampleQueue.length / SAMPLE_RATE) * 1000);
