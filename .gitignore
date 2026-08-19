@@ -1,0 +1,8 @@
+# Build artifact - rebuild with ./reader/build.sh
+reader/ForceTrainerReader.app/
+
+# Captures and logs
+*.bin
+*.log
+
+.DS_Store
